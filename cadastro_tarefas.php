@@ -1,73 +1,87 @@
 <?php
 require_once 'config.php';
-verificarLogin();
-?>
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nova Tarefa - Sistema Kanban</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <h1><i class="fas fa-tasks"></i> Nova Tarefa</h1>
-            <div class="nav-links">
-                <a href="index.php" class="btn">Voltar</a>
-                <a href="?logout=true" class="btn btn-danger">Sair</a>
-            </div>
-        </div>
-    </nav>
 
-    <div class="container">
-        <div class="form-container">
-            <form id="tarefaForm">
-                <div class="form-group">
-                    <label>Descrição da Tarefa:</label>
-                    <textarea name="descricao" required></textarea>
-                </div>
+// Verificar se usuário está logado
+if (!isset($_SESSION['usuario_id'])) {
+    echo json_encode(['error' => 'Não autorizado']);
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action'])) {
+        $usuario_id = $_SESSION['usuario_id'];
+        
+        switch ($_POST['action']) {
+            case 'criar':
+                $descricao = filter_var($_POST['descricao'], FILTER_SANITIZE_STRING);
+                $setor = filter_var($_POST['setor'], FILTER_SANITIZE_STRING);
+                $prioridade = $_POST['prioridade'];
                 
-                <div class="form-group">
-                    <label>Setor:</label>
-                    <input type="text" name="setor" required>
-                    <small>Dica: Use o CEP para buscar cidade/estado</small>
-                    <div class="api-actions">
-                        <input type="text" id="cep_input" placeholder="Digite um CEP (ex: 01001000)">
-                        <button type="button" id="buscar_cep" class="btn btn-info">Buscar por CEP</button>
-                    </div>
-                </div>
+                $stmt = $pdo->prepare("INSERT INTO tarefas (id_usuario, descricao, setor, prioridade) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$usuario_id, $descricao, $setor, $prioridade]);
+                echo json_encode(['success' => true]);
+                break;
                 
-                <div class="form-group">
-                    <label>Prioridade:</label>
-                    <select name="prioridade" required>
-                        <option value="baixa">Baixa</option>
-                        <option value="media">Média</option>
-                        <option value="alta">Alta</option>
-                    </select>
-                </div>
-
-                <div class="api-section">
-                    <button type="button" id="sugerir_atividade" class="btn btn-secondary">
-                        <i class="fas fa-magic"></i> Sugerir Atividade
-                    </button>
-                    <div id="sugestao_atividade" class="sugestao"></div>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Cadastrar Tarefa</button>
-            </form>
-            
-            <div id="message" class="message"></div>
-        </div>
-    </div>
-
-    <script src="tarefas.js"></script>
-</body>
-</html>
-
-<?php
-if (isset($_GET['logout'])) {
-    logout();
+            case 'listar':
+                $stmt = $pdo->prepare("SELECT t.*, u.nome as usuario_nome FROM tarefas t JOIN usuarios u ON t.id_usuario = u.id WHERE t.id_usuario = ? ORDER BY t.data_cadastro DESC");
+                $stmt->execute([$usuario_id]);
+                $tarefas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode($tarefas);
+                break;
+                
+            case 'atualizar':
+                $id = $_POST['id'];
+                $descricao = filter_var($_POST['descricao'], FILTER_SANITIZE_STRING);
+                $setor = filter_var($_POST['setor'], FILTER_SANITIZE_STRING);
+                $prioridade = $_POST['prioridade'];
+                $status = $_POST['status'];
+                
+                // Verificar se a tarefa pertence ao usuário
+                $stmt = $pdo->prepare("SELECT id FROM tarefas WHERE id = ? AND id_usuario = ?");
+                $stmt->execute([$id, $usuario_id]);
+                
+                if ($stmt->fetch()) {
+                    $stmt = $pdo->prepare("UPDATE tarefas SET descricao = ?, setor = ?, prioridade = ?, status = ? WHERE id = ?");
+                    $stmt->execute([$descricao, $setor, $prioridade, $status, $id]);
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Tarefa não encontrada']);
+                }
+                break;
+                
+            case 'excluir':
+                $id = $_POST['id'];
+                
+                // Verificar se a tarefa pertence ao usuário
+                $stmt = $pdo->prepare("SELECT id FROM tarefas WHERE id = ? AND id_usuario = ?");
+                $stmt->execute([$id, $usuario_id]);
+                
+                if ($stmt->fetch()) {
+                    $stmt = $pdo->prepare("DELETE FROM tarefas WHERE id = ?");
+                    $stmt->execute([$id]);
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Tarefa não encontrada']);
+                }
+                break;
+                
+            case 'atualizar_status':
+                $id = $_POST['id'];
+                $status = $_POST['status'];
+                
+                // Verificar se a tarefa pertence ao usuário
+                $stmt = $pdo->prepare("SELECT id FROM tarefas WHERE id = ? AND id_usuario = ?");
+                $stmt->execute([$id, $usuario_id]);
+                
+                if ($stmt->fetch()) {
+                    $stmt = $pdo->prepare("UPDATE tarefas SET status = ? WHERE id = ?");
+                    $stmt->execute([$status, $id]);
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Tarefa não encontrada']);
+                }
+                break;
+        }
+    }
 }
 ?>

@@ -1,8 +1,15 @@
 <?php
 require_once 'config.php';
+
+// Verificar se usuário está logado
 if (!isset($_SESSION['usuario_id'])) {
     header('Location: login.php');
     exit();
+}
+
+// Logout
+if (isset($_GET['logout'])) {
+    logout();
 }
 ?>
 <!DOCTYPE html>
